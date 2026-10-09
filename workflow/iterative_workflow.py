@@ -15,8 +15,7 @@ from langgraph.prebuilt import ToolNode
 # Environment Variables
 # --------------------------------------------------
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-load_dotenv(PROJECT_ROOT / ".env")
+load_dotenv(Path(__file__).resolve().parent / ".env")
 
 
 # --------------------------------------------------
@@ -169,17 +168,17 @@ REVIEWER_SYSTEM_PROMPT = (
     "Be strict but fair. Approve only if ALL criteria are satisfied. "
     "Reject if even one criterion is clearly missing or violated."
 )
-
-
 def reviewer_node(state: State) -> dict:
-    """Review the draft and decide whether to approve or reject it."""
+    """Review the draft and validate the reviewer's response."""
 
     draft = state["draft"]
 
     prompt = (
         f"Review this LinkedIn post draft:\n\n"
         f"{draft}\n\n"
-        "Give your review."
+        "Return exactly this format:\n"
+        "VERDICT: APPROVED or REJECTED\n"
+        "FEEDBACK: One short paragraph explaining your decision."
     )
 
     response = reviewer_llm.invoke(
@@ -191,14 +190,41 @@ def reviewer_node(state: State) -> dict:
 
     review_text = response.content.strip()
 
-    is_approved = (
-        "APPROVED" in review_text.upper().split("FEEDBACK")[0]
+    # Extract the verdict.
+    verdict_line = next(
+        (
+            line.strip()
+            for line in review_text.splitlines()
+            if line.strip().upper().startswith("VERDICT:")
+        ),
+        "",
     )
 
-    if "FEEDBACK:" in review_text:
-        feedback = review_text.split("FEEDBACK:", 1)[1].strip()
+    verdict_value = verdict_line.partition(":")[2].strip().upper()
+
+    # Extract feedback.
+    feedback_line = next(
+        (
+            line.strip()
+            for line in review_text.splitlines()
+            if line.strip().upper().startswith("FEEDBACK:")
+        ),
+        "",
+    )
+
+    feedback = feedback_line.partition(":")[2].strip()
+
+    # Validate the response before accepting the verdict.
+    valid_verdict = verdict_value in {"APPROVED", "REJECTED"}
+
+    if not valid_verdict or not feedback:
+        is_approved = False
+        feedback = (
+            "The reviewer returned an invalid response format. "
+            "Please review the draft again."
+        )
     else:
-        feedback = review_text
+        is_approved = verdict_value == "APPROVED"
 
     verdict = "APPROVED" if is_approved else "REJECTED"
 
@@ -211,11 +237,11 @@ def reviewer_node(state: State) -> dict:
         "attempt": state.get("attempt", 0) + 1,
     }
 
-
 # --------------------------------------------------
+# Routing: Continue or Stop
+# --------------------------------------------------
+
 # Routing: Tool or Draft
-# --------------------------------------------------
-
 def should_use_tool(state: State):
     last_message = state["messages"][-1]
 
@@ -223,11 +249,6 @@ def should_use_tool(state: State):
         return "tools"
 
     return "extract_draft"
-
-
-# --------------------------------------------------
-# Routing: Continue or Stop
-# --------------------------------------------------
 
 def should_stop_looping(state: State):
     if state["is_approved"]:

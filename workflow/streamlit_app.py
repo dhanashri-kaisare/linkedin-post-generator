@@ -1,16 +1,26 @@
 import streamlit as st
 from iterative_workflow import app
 
+st.set_page_config(
+    page_title="LinkedIn Post Generator",
+    page_icon="🚀",
+    layout="centered",
+)
+
 st.title("🚀 LinkedIn Post Generator")
+st.write("Generate, review, and refine a LinkedIn post using AI.")
 
 topic = st.text_input(
     "Enter a topic for your LinkedIn post",
-    placeholder="e.g. Generative AI trends in 2026"
+    placeholder="e.g. Generative AI trends in 2026",
 )
-if st.button("✨ Generate Post"):
-    if topic:
+
+if st.button("✨ Generate Post", type="primary"):
+    if not topic.strip():
+        st.warning("Please enter a topic.")
+    else:
         initial_state = {
-            "topic": topic,
+            "topic": topic.strip(),
             "messages": [],
             "draft": "",
             "review_feedback": "",
@@ -18,40 +28,50 @@ if st.button("✨ Generate Post"):
             "attempt": 0,
         }
 
-        with st.status("🚀 Generating your LinkedIn post...", expanded=True) as status:
-            st.write("✍️ Writing and reviewing your post...")
+        try:
+            with st.spinner("✍️ Writing and reviewing your post..."):
+                final_state = app.invoke(initial_state)
 
-            final_state = app.invoke(initial_state)
+            st.subheader("Generated LinkedIn Post")
+            st.markdown(final_state.get("draft", ""))
 
-            status.update(
-                label="✅ Post generation complete!",
-                state="complete",
-                expanded=False
+            st.divider()
+
+            col1, col2 = st.columns(2)
+
+            approved = final_state.get("is_approved", False)
+
+            col1.metric(
+                "Review Status",
+                "✅ Approved" if approved else "⚠️ Not approved",
             )
 
-        st.subheader("Generated LinkedIn Post")
-        st.write(final_state["draft"])
+            col2.metric(
+                "Review Attempts",
+                final_state.get("attempt", 0),
+            )
 
-        st.divider()
+            if final_state.get("review_feedback"):
+                with st.expander("Latest reviewer feedback"):
+                    st.write(final_state["review_feedback"])
 
-        col1, col2 = st.columns(2)
+            if final_state.get("draft"):
+                st.download_button(
+                    label="📥 Download Post",
+                    data=final_state["draft"],
+                    file_name="linkedin_post.txt",
+                    mime="text/plain",
+                )
 
-        col1.metric(
-            "Review Status",
-            "✅ Approved" if final_state["is_approved"] else "⚠️ Max Attempts"
-        )
+            if not approved:
+                st.warning(
+                    "The post was not approved within the allowed attempts. "
+                    "Review the feedback before publishing."
+                )
 
-        col2.metric(
-            "Review Attempts",
-            final_state["attempt"]
-        )
-
-        st.download_button(
-          label="📥 Download Post",
-          data=final_state["draft"],
-          file_name="linkedin_post.txt",
-          mime="text/plain"
-)
-
-    else:
-        st.warning("Please enter a topic.")
+        except Exception:
+            st.error(
+                "Post generation failed. Check your API configuration "
+                "and terminal logs, then try again."
+            )
+            st.exception(Exception("See the terminal for the original error."))
