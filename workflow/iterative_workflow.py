@@ -4,7 +4,6 @@ from typing import TypedDict, Annotated
 
 from dotenv import load_dotenv
 from langchain_groq import ChatGroq
-from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_tavily import TavilySearch
 from langgraph.graph import StateGraph, START, END
 from langgraph.graph.message import add_messages
@@ -31,9 +30,10 @@ tools = [search_tool]
 # --------------------------------------------------
 
 # Writer: Gemini
-writer_llm = ChatGoogleGenerativeAI(
-    model="gemini-3.6-flash",
-    temperature=0.7
+# Writer: Groq
+writer_llm = ChatGroq(
+    model="openai/gpt-oss-20b",
+    temperature=0.7,
 )
 
 writer_llm_with_tools = writer_llm.bind_tools(tools)

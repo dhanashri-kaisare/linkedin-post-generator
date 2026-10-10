@@ -18,6 +18,7 @@ topic = st.text_input(
 if st.button("✨ Generate Post", type="primary"):
     if not topic.strip():
         st.warning("Please enter a topic.")
+
     else:
         initial_state = {
             "topic": topic.strip(),
@@ -32,14 +33,25 @@ if st.button("✨ Generate Post", type="primary"):
             with st.spinner("✍️ Writing and reviewing your post..."):
                 final_state = app.invoke(initial_state)
 
-            st.subheader("Generated LinkedIn Post")
-            st.markdown(final_state.get("draft", ""))
+            draft = final_state.get("draft", "")
+            approved = final_state.get("is_approved", False)
+
+            if draft:
+                st.subheader("Generated LinkedIn Post")
+                st.markdown(draft)
+
+                st.download_button(
+                    label="📥 Download Post",
+                    data=draft,
+                    file_name="linkedin_post.txt",
+                    mime="text/plain",
+                )
+            else:
+                st.warning("The workflow finished without producing a draft.")
 
             st.divider()
 
             col1, col2 = st.columns(2)
-
-            approved = final_state.get("is_approved", False)
 
             col1.metric(
                 "Review Status",
@@ -51,17 +63,11 @@ if st.button("✨ Generate Post", type="primary"):
                 final_state.get("attempt", 0),
             )
 
-            if final_state.get("review_feedback"):
-                with st.expander("Latest reviewer feedback"):
-                    st.write(final_state["review_feedback"])
+            feedback = final_state.get("review_feedback", "")
 
-            if final_state.get("draft"):
-                st.download_button(
-                    label="📥 Download Post",
-                    data=final_state["draft"],
-                    file_name="linkedin_post.txt",
-                    mime="text/plain",
-                )
+            if feedback:
+                with st.expander("Latest reviewer feedback"):
+                    st.write(feedback)
 
             if not approved:
                 st.warning(
@@ -69,9 +75,6 @@ if st.button("✨ Generate Post", type="primary"):
                     "Review the feedback before publishing."
                 )
 
-        except Exception:
-            st.error(
-                "Post generation failed. Check your API configuration "
-                "and terminal logs, then try again."
-            )
-            st.exception(Exception("See the terminal for the original error."))
+        except Exception as exc:
+            st.error("Post generation failed.")
+            st.exception(exc)
